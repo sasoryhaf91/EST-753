@@ -1,0 +1,18 @@
+---
+title: "**Tarea 4**"
+author: "_**Antonio, H. F.**_"
+date: '2022-11-02'
+output: pdf_document
+---
+
+## Objetivo:
+
+Reproducir el Ejemplo 3 del artículo de “On Bayesian Analysis of Generalized Linear Models Using Jeffreys’s Prior Joseph G. Ibrahim; Purushottam W. Laud. Journal of the American Statistical Association, Vol. 86, No. 416. (Dec., 1991), pp. 981-986” utilizando los métodos siguientes:
+
+1. Método de Tierney y Kadane
+2. Metropolis-Hastings
+3. Gibbs sampler
+
+Para los dos primeros incisos son para programar en R (o cualquier otro lenguaje) se adjuntan el artículo base y otro artículo con la aplicación a regresión logítica. El tercer inciso se puede resolver con BUGS (WinBUGS, OpenBUGS, JAGS) en combinación con R o programando el Gibbs en R muestreando de las condicionales completas con Aceptación-Rechazo o Aceptación-Rechazo Adaptativo (paquete ARS).
+
+
