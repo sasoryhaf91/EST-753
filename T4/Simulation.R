@@ -71,3 +71,22 @@ lines(z2,col=2)
 lines(z3,col=3)
 
 
+##################
+prior.mu <- 0
+mu.1 <- 
+sig.1 <- prior.scale
+fhat <- deriv3(~ mu^(y + a - 1) * 
+              exp(-mu * (1 + 1/b)) 
+               / ((1/(1+1/b))^(y+a) * 
+              gamma(y + a)), "mu", function.arg = TRUE)
+
+
+
+
+
+
+
+
+
+
+

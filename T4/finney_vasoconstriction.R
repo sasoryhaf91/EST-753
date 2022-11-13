@@ -1,6 +1,7 @@
 library(arm)
 
 # Datos Bernoulli: Finney's vasocostriction data (1947, Biometrika, 34)
+
 finney.dat  <-read.table("T4/finney.txt",header=F)
 colnames(finney.dat) <- c("y","v","r")
 
@@ -11,17 +12,18 @@ y <- finney.dat$y
 X <- cbind(rep(1,39),log(x1),log(x2))
 XXinv <- solve(t(X)%*%X)
 
-mlefit <- glm(y~log(x1)+log(x2),family=binomial)
+mlefit <- glm(y~log(x1)+log(x2),family=binomial(link = "logit"))
 mean.as <-summary(mlefit)$coef[,1]
 sd.as <- summary(mlefit)$coef[,2]
 
+summary(mlefit)
 
 par(mfrow=c(1,3))
 for(i in 1:3){
 	curve(dnorm(x,mean.as[i],sd.as[i]),mean.as[i]-5*sd.as[i],mean.as[i]+5*sd.as[i])
 	}
 
-
+c
 
 bayesfit.unif <- bayesglm(y~log(x1)+log(x2),family=binomial,prior.mean=0, prior.scale=Inf,prior.df=Inf)
 summary(bayesfit.unif )$coef[,1:2]

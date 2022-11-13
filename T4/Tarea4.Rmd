@@ -1,6 +1,6 @@
 ---
 title: "**Tarea 4**"
-author: "_**Antonio, H. F.**_"
+author: "**Antonio, H. F.**"
 date: '2022-11-02'
 output: pdf_document
 ---
@@ -14,5 +14,293 @@ Reproducir el Ejemplo 3 del artículo de “On Bayesian Analysis of Generalized 
 3. Gibbs sampler
 
 Para los dos primeros incisos son para programar en R (o cualquier otro lenguaje) se adjuntan el artículo base y otro artículo con la aplicación a regresión logítica. El tercer inciso se puede resolver con BUGS (WinBUGS, OpenBUGS, JAGS) en combinación con R o programando el Gibbs en R muestreando de las condicionales completas con Aceptación-Rechazo o Aceptación-Rechazo Adaptativo (paquete ARS).
+
+
+## Resultados:
+
+### Información general
+
+El ejemplo 3, del artículo mencionado anteriormente, se basa en los datos obtenidos en el estudio de Finney (1947) del efecto de  la tasa y volumen de aire inspirado sobre la constricción transitoria de los vasos en la piel de los dedos. La variable respuesta es binaria donde 1 indica la ocurrencia de la constricción y 0 lo contrario. 
+
+### Datos
+
+Se cuenta con 39 observaciones de la tasa (R), volumen (V) y respuesta (Y), como se muestra en la siguiente tabla,
+
+\begin{center}
+\begin{tabular}{rrr|rrr|rrr|rrr}\hline
+Y & V & R & Y & V & R & Y & V & R & Y & V & R\\
+\ \ & [l] & [lps] &  & [l] & [lps] & \ \ & [l] & [lps] &  & [l] & [lps] \\
+\hline
+1&3.7&0.825&0&0.8&0.57&0&0.4&2&1&2.7&0.75\\
+1&3.5&1.09&0&0.55&2.75&0&0.95&1.36&0&2.35&0.03\\
+1&1.25&2.5&0&0.6&3&0&1.35&1.35&0&1.1&1.83\\
+1&0.75&1.5&1&1.4&2.33&0&1.5&1.36&1&1.1&2.2\\
+1&0.8&3.2&1&0.75&3.75&1&1.6&1.78&1&1.2&2\\
+1&0.7&3.5&1&2.3&1.64&0&0.6&1.5&1&0.8&3.33\\
+0&0.6&0.75&1&3.2&1.6&1&1.8&1.5&0&0.95&1.9\\
+0&1.1&1.7&1&0.85&1.415&0&0.95&1.9&0&0.75&1.9\\
+0&0.9&0.75&0&1.7&1.06&1&1.9&0.95&1&1.3&1.625\\
+0&0.9&0.45&1&1.8&1.8&0&1.6&0.4&&&\\
+\hline
+\end{tabular}
+\end{center}
+
+### Modelo
+
+Debido a que la variable respuesta ($y_i$) es binaria, se puede modelar con una distribución Bernoulli, donde la variable respuesta tiene la probabilidad $\pi_i$ de tomar el valor 1, y la probabilidad $1-\pi_i$ para 0, entonces,
+
+\begin{equation}
+\tag{1}
+y_i|\pi_i \sim Bernoulli(\pi_i)
+\end{equation}
+
+Bajo el MLG ligamos la $E[y_i]$ con covariables ($\mathbf{X}$) mediante una función liga, que el caso de una respuesta binomial la función es la logit, esto es,
+
+\begin{equation}
+\tag{2}
+\pi_i = \frac{exp\{ \mathbf{x}_i'\beta\}}{1+exp \{\mathbf{x}_i' \beta\}}
+\end{equation}
+
+Dependiendo del enfoque utiliizado, un elemento que siempre está presente, es la función de verosimilitud, la cual se forma con (1) y (2), es decir,
+
+\begin{equation}
+\tag{3}
+L(\beta|\mathbf{y},\mathbf{X}) = \prod_{i=1}^n \left( \frac{exp\{ \mathbf{x}_i'\beta\}}{1+exp \{ \mathbf{x}_i' \beta\}}\right)^{y_i} \left( \frac{1}{1+exp \{ \mathbf{x}_i \beta\}} \right)^{1-y_i}
+\end{equation}
+
+### Método de Tierney y Kadane
+
+Este método fue propuesto por Tierney y Kadane (1986) para aproximar esperanzas a posteri de funciones positivas. Está basado en expansión de series de segundo orden para aproximar el término de la integral. Para aproximar la función marginal de los $B$'s se utiliza la siguiente función:
+
+\begin{equation}
+\tag{4}
+\hat{p}(\beta_1\mathbf{y},\mathbf{X}) =  \left( \frac{det\Sigma* (\beta_1)}{2\pi det \Sigma } \right)^{0.5}exp \left\{\  n[h* (\beta_1,\hat{\beta}_2^* - h(\beta_1, \hat{\beta}_2))] \right\}
+\end{equation}
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+library(LaplacesDemon)
+library(AER)
+library(coda)
+library(lattice)
+library(rjags)
+```
+
+```{r}
+finney <- read.table("finney.txt", quote="\"", comment.char="")
+finney$V2 <- log(finney$V2)
+finney$V3 <- log(finney$V3)
+colnames(finney) <- c("y","v","r")
+M1<-glm(y~.,data=finney,family=binomial)
+y<-finney$y
+X<-model.matrix(M1)
+N<-nrow(X)
+J<-ncol(X)
+
+mon.names <- "LP"
+parm.names <- as.parm.names(list(beta=rep(0,J)))
+
+MyData <- list(J=J,X=X,mon.names=mon.names,parm.names=parm.names,y=y)
+
+##Specify a model
+Model<-function(parm,Data)
+{
+## parameters
+beta<-parm[1:Data$J]
+## Log(prior Densities)
+beta.prior<-dnormv(beta,0,10000,log=F)
+mu<-tcrossprod(Data$X,t(beta))
+## Log-Likelihood
+#lambda<-exp(mu)
+#LL<-sum(dpois(Data$y,lambda,log=T))
+pi <- exp(mu)/(1+exp(mu))
+LL<-sum(dbern(Data$y,pi,log=T))
+##Log-posterior
+LP<-LL+sum(beta.prior)
+Modelout<-list(LP=LP,Dev=-2*LL,Monitor=LP,
+yhat=rnorm(length(mu),mu),parm=parm)
+return(Modelout)
+}
+
+## Initial values
+Initial.Values<-c(rep(0,J))
+```
+
+```{r}
+M2<-LaplaceApproximation(Model, Initial.Values, Data = MyData,sir=TRUE,
+Iterations=5000,Method="TR")
+print(M2)
+caterpillar.plot(M2,Parms="beta")
+
+```
+
+
+#### LaplaceDemon
+
+```{r}
+Initial.Values<-as.initial.values(M2)
+M3 <-LaplacesDemon(Model, Data=MyData, Initial.Values,
+                   Covar=M2$Covar,Iterations=10000,Algorithm="IM",
+                   Specs=list(mu=M2$Summary1[1:length(Initial.Values),1]))
+print(M3)
+```
+
+
+```{r}
+samples <- mcmc(M3$Posterior2)
+densityplot(samples)
+```
+
+
+#### Metropolis-Hastings
+
+```{r}
+# Modelo Logit (MV)
+####
+finney <- read.table("finney.txt", quote="\"", comment.char="")
+finney$V2 <- log(finney$V2)
+finney$V3 <- log(finney$V3)
+colnames(finney) <- c("y","v","r")
+y<-finney$y
+fit_logit <- glm(y~.,data=finney,family=binomial)
+summary(fit_logit)
+X<-model.matrix(fit_logit)
+```
+
+#### Log-Verosimiltud
+
+```{r}
+# Log-verosimlitud del modelo de regresión logística
+loglik <- function(beta, y, X) {
+eta <- c(X %*% beta)
+sum(y * eta - log(1 + exp(eta)))
+}
+# Log-a posteriori
+logpost <- function(beta, y, X) {
+beta.prior<-dnormv(beta,0,10000,log=F)
+loglik(beta, y, X) + sum(beta.prior)
+}
+```
+
+
+#### MH con caminata aleatoria (MRW)
+
+```{r}
+# R:= número de muestras
+# burn_in:= número de muestras elimindas
+# S:=Matriz de covarianzas de la propuesta normal
+
+RMH <- function(R, burn_in, y, X, S) {
+p <- ncol(X)
+out <- matrix(0, R, p) # Inicializar una matriz vacia para almacer la salida
+beta <- rep(0, p) # Valores iniciales
+logp <- logpost(beta, y, X)
+# Eigen-descomposición (puede ser Cholesky)
+eig <- eigen(S, symmetric = TRUE)
+A1 <- t(eig$vectors) * sqrt(eig$values)
+# Inicio del Gibbs sampler
+for (r in 1:(burn_in + R)) {
+beta_new <- beta + c(matrix(rnorm(p), 1, p) %*% A1)
+logp_new <- logpost(beta_new, y, X)
+alpha <- min(1, exp(logp_new - logp))
+if (runif(1) < alpha) {
+logp <- logp_new
+beta <- beta_new # Aceptar el valor
+}
+# Almacenar los valores después del periodo burn-in
+if (r > burn_in) {
+out[r - burn_in, ] <- beta
+}
+}
+out
+}
+```
+
+#### MH preliminar
+
+```{r}
+library(coda)
+R <- 30000 # Numero de muestras retenidas
+burn_in <- 30000 # Burn-in
+set.seed(123)
+# Matriz de covarianzas de la propuesta
+S <- diag(1e-3, ncol(X))
+# Correr el MCMC
+start.time <- Sys.time()
+fit_MCMC <- as.mcmc(RMH(R, burn_in, y, X, S)) # Convertir la matriz en un objeto "coda"
+end.time <- Sys.time()
+time_in_sec <- as.numeric(end.time - start.time)
+time_in_sec
+```
+
+```{r}
+# Diagnóstico
+summary(effectiveSize(fit_MCMC)) # Tamaño de muestra efectivo
+summary(R / effectiveSize(fit_MCMC)) # Tiempo de autocorrelación integrado
+summary(1 - rejectionRate(fit_MCMC)) # Tasa de aceptación
+```
+
+
+#### Aproximación de la matriz de covarianzas a posteriori
+
+```{r}
+set.seed(123)
+# Correr el MCMC
+start.time <- Sys.time()
+# Se utiliza la aproximación de Laplace de la matriz de covarianzas
+fit_logit <- glm(y~.,data=finney,family=binomial)
+p <- ncol(X)
+S <- 2.38^2 * vcov(fit_logit) / p
+# MCMC
+fit_MCMC <- as.mcmc(RMH(R, burn_in, y, X, S)) # Convertit la matriz en un objeto coda
+end.time <- Sys.time()
+time_in_sec <- as.numeric(end.time - start.time)
+time_in_sec
+```
+
+```{r}
+# Diagnóstico
+summary(effectiveSize(fit_MCMC)) # Tamaño de muestra efectivo
+```
+
+```{r}
+summary(R / effectiveSize(fit_MCMC)) # Tiempo de autocorrelación integrado
+```
+
+```{r}
+summary(1 - rejectionRate(fit_MCMC)) # Tasa de aceptación
+```
+
+```{r}
+# Trazas
+plot(fit_MCMC[, 1:3])
+```
+
+
+### Gibbs sampler
+
+Para este método se utilizó JAGS (Just Another Gibss Sampler). Este método va generando muestras de las distribuciones condicionales a posteriori de la distribución de interes, en este caso el vector de parámetros $\beta$.
+
+
+```{r}
+finney.dat  <-read.table("finney.txt",header=F)
+colnames(finney.dat) <- c("y","v","r")
+x1 <- finney.dat$v
+x2 <- finney.dat$r
+y <- finney.dat$y
+n <- length(y)
+datos <- list(n=n,y=finney.dat$y,v=finney.dat$v,r=finney.dat$r)
+mlefit <- glm(y~log(x1)+log(x2),family=binomial(link = "logit"))
+mean.as <-summary(mlefit)$coef[,1]
+sd.as <- summary(mlefit)$coef[,2]
+logis <-"logis.txt"  
+
+iniciales <- list(b=mean.as)
+jagsmod <- jags.model(logis,d=datos,inits=iniciales)
+update(jagsmod, 10000)
+cadena=coda.samples(jagsmod, "b", 
+                     n.iter=10000,thin=50)
+summary(cadena)
+plot(cadena)
+```
 
 
