@@ -1,8 +1,10 @@
 ---
-title: "**Tarea 5**"
-author: "**Antonio, H. F.**"
-date: "2022-11-22"
-output: html_document
+title: '**Tarea 5**'
+author: '**Antonio, H. F.**'
+date: '2022-11-22'
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ## Objetivos
