@@ -1,0 +1,54 @@
+---
+title: "Examen 2. Métodos Estadísticos Avanzados"
+author: "Antonio, H. F."
+date: "2022-11-27"
+output: pdf_document
+---
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+#install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/testing"), dep=TRUE)
+#library(INLA)
+#inla.upgrade() # for the stable version
+```
+
+
+## Objetivo
+
+Reproducir los resultados del Ejemplo 1 (Modelo I y II) de la sección 3 del artículo **Fitzmaurice, G. M. and N. M. Laird (1993). A likelihood - based for analysingg longitudinal binary responses. Biometrika 80 (1), 141 - 151**, utilizando:
+  
+  1) El método propuesto en el artículo.
+  2) El enfoque bayesiano con el método computacional de su preferencia.
+
+## Resultados
+
+### Preparación
+
+```{r}
+data <- read.csv("Ohio.csv",header=T)
+data$resp <- as.factor(data$resp)
+data$smoke <- as.factor(data$smoke)
+#data$id <- as.factor(data$id)
+```
+
+### Modelo I: Independencia entre las observaciones en el tiempo
+
+```{r}
+m1 <- glm(resp ~ age + smoke + age*smoke, family = binomial(link="logit"),
+          data = data)
+summary(m1)
+```
+
+### Modelo II: Correlación intercambiable entre años sucesivos
+
+```{r}
+library(gee)
+m2 <- gee(resp ~ age + smoke + age*smoke, id = id,
+          data=data, family=binomial, corstr = "exchangeable")
+summary(m2)
+```
+
+
+
+
+
+
