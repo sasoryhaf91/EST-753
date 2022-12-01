@@ -6,14 +6,6 @@ output: pdf_document
 ---
 
 ```{r,echo=FALSE,message=FALSE,warning=FALSE}
-<<<<<<< HEAD
-install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
-library(INLA)
-inla.upgrade() # for the stable version
-##
-#library(INLA)
-#library(brinla)
-=======
 ## INLA
 #install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
 library(INLA)
@@ -33,7 +25,6 @@ library(gee)
 ## ggplot
 library(ggplot2)
 library(gridExtra)
->>>>>>> 53485a9e1b34969bebd534f89c8213195395d1fa
 ```
 
 
