@@ -6,45 +6,95 @@ output: pdf_document
 ---
 
 ```{r,echo=FALSE,message=FALSE,warning=FALSE}
+<<<<<<< HEAD
 install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
 library(INLA)
 inla.upgrade() # for the stable version
 ##
 #library(INLA)
 #library(brinla)
+=======
+## INLA
+#install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
+library(INLA)
+#inla.upgrade() # for the stable version
+
+## Brinla
+library(devtools)
+#install_github("julianfaraway/brinla")
+library(brinla)
+
+## lme4
+library(lme4)
+
+## Gee
+library(gee)
+
+## ggplot
+library(ggplot2)
+library(gridExtra)
+>>>>>>> 53485a9e1b34969bebd534f89c8213195395d1fa
 ```
 
 
-## Objetivo
+# Objetivo
 
 Reproducir los resultados del Ejemplo 1 (Modelo I y II) de la sección 3 del artículo **Fitzmaurice, G. M. and N. M. Laird (1993). A likelihood - based for analysingg longitudinal binary responses. Biometrika 80 (1), 141 - 151**, utilizando:
   
   1) El método propuesto en el artículo.
   2) El enfoque bayesiano con el método computacional de su preferencia.
+  
+# Datos
 
-## Resultados
+Los datos corresponden a un subconjunto tomado del estudio longitudinal de los efectos en la salud de la contaminación del aire reportados por **Ware et al., (1984)**. El subconjunto de datos contiene solo los registros de los niños que fueron analizados durante los 4 años del estudio, esto es 537 niños con cuatro registros, uno por año. La variable respuesta es binaria, 1 si se presenta silibancia, 0 de otro modo. Las covariables que pretenden explicar la probabilidad de silibancia son: 
 
-### Preparación
+  1) Mamá fumadora, codificada como 1 si fuma regularmente, 0 de otro modo.
+  2) Edad del niño, codificada como 0 cuando el niño tenia 9 años, 1 cuando tenia 10, -1 cuando tenia 8 y -2 cuando tenia 7.
+  
+# Modelos
+
+La variable respuesta es binaria, por lo tanto para modelar la $E(Y_i)$ se plantean varios escenarios:
+  
+  1) Las $Y_i$ son independientes y se puede realizar una regresión logistica. Desde un enfoque frequentista se obtienen los coeficientes de regresión o los valores de los parámetros de interés mediante mínimos cuadros ponderados. Desde un enfoque bayesiano, se obtienen las distribuciones marginales aposteriori de cada uno de los parámetros de interés mediante muestreo de Gibs.
+  
+  2) Las $Y_i$ son dependientes, es decir, que las cuatro mediciones de cada niño tienen una estructura de dependencia que se debe incluir en el modelo. Desde un enfoque frecuentista incluir la dependencia plantea un problema que es más complejo, pero existen métodos como quasi-verosimilitud, verosimilitud restringida, ecuaciones cuasi-score. Desde un enfoque bayesiano se puede resolver de una manera más directa con la aumentación de datos.
+  
+
+# Enfoque frecuentista
+
+## 1) Modelo I: Independencia entre las observaciones
+
+### Preparación de los datos
 
 ```{r}
 data <- read.csv("Ohio.csv",header=T)
 data$resp <- as.factor(data$resp)
 data$smoke <- as.factor(data$smoke)
-#data$id <- as.factor(data$id)
 ```
 
-### Modelo I: Independencia entre las observaciones en el tiempo
+### Modelo 
+
+  El modelo planteado es $E(Y_{ij})=logit(\mu_{ij})$, $logit(\mu_{ij})=\eta_{ij}$, $\eta_{ij}=\beta_0+\beta_1age_j+\beta_2smoke_i+u_{ij}$, $i=1,...,537$, $j=1,2,3,4$, y como la esperanza en un modelo binomial es igual a la probabilidad de éxito, entonces:
+
+$$
+P(Y_{ij}=1)=\frac{exp\{ \eta_{ij}\}}{1+exp\{ \eta_{ij}\}}
+$$
+
+y el término $u_{ij} \sim N(0, \sigma_e^2)$ contiene el efecto aleatorio de los niños, considerando que las observaciones entre cada niño son independientes, debido a esto, el problema se reduce a utilizar la verosimilitud completa y resolver mediante mínimos cuadrados ponderados iterativos.
 
 ```{r}
-m1 <- glm(resp ~ age + smoke + age*smoke, family = binomial(link="logit"),
+model1 <- resp ~ age + smoke + age*smoke
+m1 <- glm(model1, family = binomial(link="logit"),
           data = data)
 summary(m1)
 ```
 
-### Modelo II: Correlación intercambiable entre años sucesivos
+## 2) Modelo II: Dependencia entre las observaciones
+
+El modelo planteado es similar al modelo anterior, solamente agregregamos correlación entre las observaciones de cada niño, y planteamos que esta es la misma entre cada observación, por lo tanto el término $u_{ij} \sim N\left(0,\frac{\sigma_e^{2}}{(1-\rho^2)}\right)$ contiene el efecto aleatorio de los niños considerando la correlación entre las observaciones.
+
 
 ```{r}
-library(gee)
 m2 <- gee(resp ~ age + smoke + age*smoke, id = id,
           data=data, family=binomial, corstr = "exchangeable")
 summary(m2)
@@ -52,6 +102,141 @@ summary(m2)
 
 
 
+# Enfoque Bayesiano
+
+## 1) Modelo I: Independencia entre las observaciones
+
+### Preparación de los datos
+
+```{r}
+data <- read.csv("Ohio.csv",header=T)
+```
+
+### Modelo
+
+El modelo planteado es similar al modelo planteado en el enfoque frecuentista, solo agregamos distribuciones apriori para los parámetros de interés, en este caso como no conocemos apriori las distribuciones de los coeficientes de regresión proponemos $\beta_{i} \sim N(0,1000)$, $i=1,2,3,4$ y $\sigma_e^2 \sim \Gamma(1,10^{-5})$.
 
 
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+#m3.1 <- glmer(resp ~ age + smoke + age*smoke + (1|id),
+#              nAGQ = 25, family = binomial, 
+#              data=data)
+#summary(m3.1)
+```
+
+
+```{r}
+model3 <- resp ~ age + smoke + age*smoke + f(id, model="iid")
+m3 <- inla(model3, family = "binomial", Ntrials = 1,
+           data=data)
+```
+
+
+Resumen de los efectos fijos:
+
+```{r}
+round(m3$summary.fixed, 4)
+```
+
+Resumen de los efectos aleatorios:
+
+```{r}
+round(bri.hyperpar.summary(m3), 4)
+```
+
+
+Graficas de las distribuciones a posteriori de los parámetros de interés:
+
+```{r}
+p1 <- ggplot(data.frame(m3$marginals.fixed[[1]]),aes(x,y)) +
+geom_line()+xlab("logit")+ylab("density")+ggtitle("Intercept")
+p2 <- ggplot(data.frame(m3$marginals.fixed[[2]]),aes(x,y)) +
+geom_line()+xlab("logit")+ylab("density")+ggtitle("age")
+p3 <- ggplot(data.frame(m3$marginals.fixed[[3]]),aes(x,y)) +
+geom_line()+xlab("logit")+ylab("density")+ggtitle("smoke")
+p4 <- ggplot(data.frame(m3$marginals.fixed[[4]]),aes(x,y)) +
+geom_line()+xlab("logit")+ylab("density")+ggtitle("I(age*smoke)")
+grid.arrange(p1,p2,p3,p4,ncol=2)
+```
+
+Graficas de las distribuciones a posteriori de los hiperparámetros de interés:
+
+```{r}
+sden <- data.frame(bri.hyper.sd(m3$marginals.hyperpar[[1]]))
+p1 <- ggplot(sden,aes(x,y)) + geom_line() + xlab("logit") +
+ylab("density")+ggtitle("SD(u)")
+grid.arrange(p1,ncol=1)
+```
+
+## 2) Modelo II: Dependencia entre las observaciones
+
+### Modelo
+
+El modelo planteado es similar al modelo anterior, solamente agregregamos correlación entre las observaciones de cada niño, y planteamos que esta es la misma entre cada observación, por lo tanto agregamos una distribución apriori para $\sigma_u^2 \sim \Gamma(1,10^{-5})$.
+
+```{r}
+data$group <- rep(1:4,537)
+model4 <- resp ~ age + smoke + I(age*smoke) + 
+f(id, group=group, control.group = list(model="exchangeable"))
+m4 <- inla(model4, family = "binomial", Ntrials = 1,
+           data=data)
+```
+
+Resumen de los efectos fijos:
+
+```{r}
+round(m4$summary.fixed, 4)
+```
+
+Resumen de los efectos aleatorios:
+
+```{r}
+round(bri.hyperpar.summary(m4), 4)
+```
+
+Graficas de las distribuciones a posteriori de los parámetros de interés:
+
+```{r}
+p1 <- ggplot(data.frame(m4$marginals.fixed[[1]]),aes(x,y)) +
+geom_line()+xlab("logit")+ylab("density")+ggtitle("Intercept")
+p2 <- ggplot(data.frame(m4$marginals.fixed[[2]]),aes(x,y)) +
+geom_line()+xlab("logit")+ylab("density")+ggtitle("age")
+p3 <- ggplot(data.frame(m4$marginals.fixed[[3]]),aes(x,y)) +
+geom_line()+xlab("logit")+ylab("density")+ggtitle("smoke")
+p4 <- ggplot(data.frame(m4$marginals.fixed[[4]]),aes(x,y)) +
+geom_line()+xlab("logit")+ylab("density")+ggtitle("I(age*smoke)")
+grid.arrange(p1,p2,p3,p4,ncol=2)
+```
+
+Graficas de las distribuciones a posteriori de los hiperparámetros de interés:
+
+```{r}
+sden <- data.frame(bri.hyper.sd(m4$marginals.hyperpar[[1]]))
+rho <- data.frame(bri.hyper.sd(m4$marginals.hyperpar[[2]]))
+p1 <- ggplot(sden,aes(x,y)) + geom_line() + xlab("logit") +
+ylab("density")+ggtitle("SD(u)")
+#p2 <- ggplot(rho,aes(x,y)) + geom_line() + xlab("logit") +
+#ylab("density")+ggtitle("rho")
+grid.arrange(p1,ncol=2)
+```
+
+
+# Resumen
+
+Se puede observar en la siguiente gráfica que tanto en el enfoque frecuentista y el enfoque bayesiano no hay diferencia significativa al considerar la correlación entre las observaciones de los niños dentro del efecto aleatorio. Por otra parte, las media de los parámetros de los efectos fijos relacionados con las covariables son similares en ambos enfoques y que solamente cambió el valor del intercepto. Los valores de la desviación estandar (en paréntesis) son muy similares dentro de cada enfoque.
+
+\begin{center}
+\begin{tabular}{r|rr|rr}
+\hline
+Parámetros&Frecuentista & & Bayesiano &  \\
+\ \ & Obs. Ind. & Obs. Dep & Obs. Ind. & Obs. Dep \\
+\hline
+$\beta_1$ &-1.9008 (0.0887)& -1.9005 (0.1187)& -3.0386 (0.1976)& -3.0501 (0.2113) \\
+$\beta_2$ &-0.1413 (0.0695)& -0.1412 (0.0561)& -0.2062 (0.0805)& -0.2075 (0.0811) \\
+$\beta_3$ & 0.3140 (0.1394)&  0.3138 (0.1872)&  0.4530 (0.2538)&  0.4547 (0.2529) \\
+$\beta_4$ & 0.0708 (0.1107)&  0.0708 (0.0892)&  0.1006 (0.0887)&  0.1014 (0.1296) \\ 
+$\rho$ & &0.3544& &0.9715 \\
+\hline
+\end{tabular}
+\end{center}
 
