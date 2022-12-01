@@ -1,0 +1,16 @@
+---
+title: "Mixturesof Gaussians"
+author: "Antonio, H. F."
+date: '2022-11-26'
+output: pdf_document
+---
+
+
+```{r}
+# Mixture of univariate Gaussians, bimodal
+x = seq(-5, 12, length=100)
+y = 0.6*dnorm(x, 0, 1) + 0.4*dnorm(x, 5, 2)
+par(mar=c(4,4,1,1)+0.1)
+plot(x, y, type="l", ylab="Density", las=1, lwd=2)
+```
+
