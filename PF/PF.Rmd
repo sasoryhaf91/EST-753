@@ -1,0 +1,472 @@
+---
+title: "Proyecto Final"
+author: "Antonio, H. F."
+date: "2022-12-04"
+output: pdf_document
+---
+
+# Limpieza
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+#Limpiamos el entorno de variables
+rm(list=ls())
+```
+
+# Librerias necesarias
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+library(foreign)
+library(sqldf)        #Permite ejecutar sentencias SQL
+library(gplots)
+library(car)
+library(rjson)
+library(lubridate)
+library(PerformanceAnalytics)
+library(psych)
+library(zoo)
+## INLA
+#install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
+library(INLA)
+#inla.upgrade() # for the stable version
+
+## Brinla
+library(devtools)
+#install_github("julianfaraway/brinla")
+library(brinla)
+
+## lme4
+library(lme4)
+
+## Gee
+library(gee)
+
+## ggplot
+library(ggplot2)
+library(gridExtra)
+```
+
+
+# Preparación de datos 2019
+
+```{r}
+#cont2021 <- read.csv2("contaminantes_2021.csv", skip = 10, sep=",")
+#met2021 <- read.csv2("meteorología_2021.csv", skip = 10, sep=",")
+ind2021 <- read.csv2("indice_2021.csv", skip = 9, sep=",", header=FALSE)
+```
+
+```{r}
+#cont2021$date <- parse_date_time(cont2021$date, "dmY HM")
+#cont2021$Year <- as.numeric(format(cont2021$date,'%Y')) 
+#cont2021$Mont <- as.numeric(format(cont2021$date,'%m')) 
+#cont2021$Days <- as.numeric(format(cont2021$date,'%d')) 
+#cont2021$Hour <- hour(cont2021$date)
+#cont2021$value <- as.numeric(cont2021$value)
+```
+
+
+# Seleccionando Ozono
+
+```{r}
+Ozono2021 <- sqldf('
+              SELECT Year, Mont, Days, Hour, id_station, value
+              FROM cont2021
+              WHERE id_parameter = "O3"
+              ')
+```
+
+# Buscando valores máximos
+
+```{r}
+Ozono2021_max <- sqldf('
+                SELECT Year, Mont, Days, Hour, id_stMONon, value
+                FROM Ozono2021
+                WHERE value > 140 AND id_stMONon = "IZT"
+                ')
+```
+
+```{r}
+Ozono2021$Y <- ifelse(Ozono2021$value > 140, 1, 0)
+Ozono2021 <- na.omit(Ozono2021)
+```
+
+
+# MaYores a 154
+
+```{r}
+#rm(list=ls())
+
+
+Aco<- data.frame()
+
+for(i in 2015:2021){
+  ano <- i
+  filec <- paste("contaminantes_", ano,".csv", sep="")
+  filem <- paste("meteorología_", ano,".csv",sep="")
+  
+  datac <- read.csv2(filec, skip = 10, sep=",")
+  datam <- read.csv2(filem, skip = 10, sep=",")
+  
+  datac$value <- as.numeric(datac$value)
+  datam$value <- as.numeric(datam$value)
+  
+  estc <- sqldf('
+                SELECT date, id_station, id_parameter, value
+                FROM datac
+                WHERE id_station = "SFE"
+                ')
+
+  estm <- sqldf('
+                SELECT  id_parameter, value
+                FROM datam
+                WHERE id_station = "SFE"
+                ')
+  
+  
+  
+  # est1 <-  sqldf('
+  #               SELECT date, value AS CO_1
+  #               FROM estc
+  #               WHERE id_parameter = "CO" 
+  #               ')
+  
+  # est2 <-  sqldf('
+  #               SELECT value AS NO_1
+  #               FROM estc
+  #               WHERE id_parameter = "NO" 
+  #               ')
+  # 
+  # est3 <-  sqldf('
+  #               SELECT value AS NO2_1
+  #               FROM estc
+  #               WHERE id_parameter = "NO2" 
+  #               ')
+  # 
+  # est4 <-  sqldf('
+  #               SELECT value AS SO2_1
+  #               FROM estc
+  #               WHERE id_parameter = "SO2" 
+  #               ')
+  
+  est5 <-  sqldf('
+                SELECT date, id_station, value AS O3_1
+                FROM estc
+                WHERE id_parameter = "O3" 
+                ')
+  
+  est6 <-  sqldf('
+                SELECT value AS NOX_1
+                FROM estc
+                WHERE id_parameter = "NOX" 
+                ')
+  
+  # est7 <-  sqldf('
+  #               SELECT value AS RH_1
+  #               FROM estm
+  #               WHERE id_parameter = "RH" 
+  #               ')
+  
+  est8 <-  sqldf('
+                SELECT value AS TMP_1
+                FROM estm
+                WHERE id_parameter = "TMP" 
+                ')
+  
+  # est9 <-  sqldf('
+  #               SELECT value AS WDR_1
+  #               FROM estm
+  #               WHERE id_parameter = "WDR" 
+  #               ')
+  
+  est10 <-  sqldf('
+                SELECT value AS WSP_1
+                FROM estm
+                WHERE id_parameter = "WSP" 
+                ')
+  
+  
+  Aco_a <- cbind(est5,est6,est8,est10)
+    #cbind(est1,est2,est3,est4,est5,est6,est7,est8,est9,est10)
+  Aco <- rbind(Aco, Aco_a)
+}
+
+Aco$date <- parse_date_time(Aco$date, "dmY HM")
+Aco$Year <- as.numeric(format(Aco$date,'%Y')) 
+Aco$Mont <- as.numeric(format(Aco$date,'%m')) 
+Aco$Days <- as.numeric(format(Aco$date,'%d')) 
+Aco$Hour <- hour(Aco$date)
+
+Aco$O3L6 <- lag(zoo(Aco$O3_1), -6, na.pad = TRUE)
+Aco$O3L5 <- lag(zoo(Aco$O3_1), -5, na.pad = TRUE)
+Aco$O3L4 <- lag(zoo(Aco$O3_1), -4, na.pad = TRUE)
+Aco$O3L3 <- lag(zoo(Aco$O3_1), -3, na.pad = TRUE)
+Aco$TMPL6 <- lag(zoo(Aco$TMP_1), -6, na.pad = TRUE)
+Aco$TMPL5 <- lag(zoo(Aco$TMP_1), -5, na.pad = TRUE)
+Aco$TMPL4 <- lag(zoo(Aco$TMP_1), -4, na.pad = TRUE)
+Aco$TMPL3 <- lag(zoo(Aco$TMP_1), -3, na.pad = TRUE)
+Aco$NOXL6 <- lag(zoo(Aco$NOX_1), -6, na.pad = TRUE)
+Aco$NOXL5 <- lag(zoo(Aco$NOX_1), -5, na.pad = TRUE)
+Aco$NOXL4 <- lag(zoo(Aco$NOX_1), -4, na.pad = TRUE)
+Aco$NOXL3 <- lag(zoo(Aco$NOX_1), -3, na.pad = TRUE)
+Aco$WSPL6 <- lag(zoo(Aco$WSP_1), -6, na.pad = TRUE)
+Aco$WSPL5 <- lag(zoo(Aco$WSP_1), -5, na.pad = TRUE)
+Aco$WSPL4 <- lag(zoo(Aco$WSP_1), -4, na.pad = TRUE)
+Aco$WSPL3 <- lag(zoo(Aco$WSP_1), -3, na.pad = TRUE)
+
+```
+
+
+
+
+```{r}
+Aco.na <- na.omit(Aco)
+pairs.panels(Mon.na, 
+             smooth = TRUE,      # Si TRUE, dibuja ajuste suavizados de tipo loess
+             scale = FALSE,      # Si TRUE, escala la fuente al grado de correlación
+             density = TRUE,     # Si TRUE, añade histogramas y curvas de densidad
+             ellipses = TRUE,    # Si TRUE, dibuja elipses
+             method = "pearson", # Método de correlación (también "spearman" o "kendall")
+             pch = 21,           # Símbolo pch
+             lm = FALSE,         # Si TRUE, dibuja un ajuste lineal en lugar de un ajuste LOESS
+             cor = TRUE,         # Si TRUE, agrega correlaciones
+             jiggle = FALSE,     # Si TRUE, se añade ruido a los datos
+             factor = 2,         # Nivel de ruido añadido a los datos
+             hist.col = 4,       # Color de los histogramas
+             stars = TRUE,       # Si TRUE, agrega el nivel de significación con estrellas
+             ci = FALSE)          # Si TRUE, añade intervalos de confianza a los ajustes)
+```
+
+```{r}
+#ACO_Ent <- Aco
+Aco1 <- SFE_Ent
+plot(Aco1$date,Aco1$O3_1, pch=".", xlab= "TIEMPO [días]", ylab = "OZONO [ppb]", main = "SFE")
+abline(h=90,col=3)
+abline(h=144,col=4)
+abline(h=154,col=2)
+```
+
+
+
+```{r}
+
+#Unidos <- rbind(ACO_Ent,CUA_Ent,FAC_Ent,MER_Ent,PED_Ent,SFE_Ent,TAH_Ent,TLA_Ent,VIF_Ent)
+#write.csv(Unidos,file = "Unidos.csv", col.names=T, row.names = F)
+Aco.na <- na.omit(Unidos)
+Aco.na$Y <- ifelse(Aco.na$O3_1 > 94, 1, 0)
+sum(Aco.na$Y)
+```
+
+```{r}
+formula <- Y ~ NOX_1+ TMP_1 + WSP_1 + Year + Mont + Hour
+#+ TMPL3 + TMPL4
+#+ TMPL4 + TMPL5 + TMPL6  
+#+ O3L4 + O3L5 + O3L6
+  #NOXL3 + NOXL4 + NOXL5 + NOXL6 + WSPL3 + WSPL4 + WSPL5 + WSPL6
+  #NOX_1 + TMP_1 
+#+ TMPL24 + NOXL24
+  #CO_1 + NO_1 + NO2_1 + SO2_1 + NOX_1 + RH_1 + TMP_1 + WDR_1 + WSP_1 
+mCua <- glm(formula, data = Aco.na, family = binomial(link="logit"))
+summary(mCua)
+```
+
+```{r}
+model1<- Y ~ TMP_1 + WSP_1 + Year + Mont 
+m3 <- inla(model1, family = "binomial", Ntrials = 1,
+           data=Aco.na)
+```
+
+Resumen de los efectos fijos:
+
+```{r}
+round(m3$summary.fixed, 4)
+```
+
+Resumen de los efectos aleatorios:
+
+```{r}
+round(bri.hyperpar.summary(m3), 4)
+```
+
+```{r}
+Aco_Pru<- data.frame()
+
+for(i in 2022:2022){
+  ano <- i
+  filec <- paste("contaminantes_", ano,".csv", sep="")
+  filem <- paste("meteorología_", ano,".csv",sep="")
+  
+  datac <- read.csv2(filec, skip = 10, sep=",")
+  datam <- read.csv2(filem, skip = 10, sep=",")
+  
+  datac$value <- as.numeric(datac$value)
+  datam$value <- as.numeric(datam$value)
+  
+  estc <- sqldf('
+                SELECT date, id_parameter, value
+                FROM datac
+                WHERE id_station = "PED" 
+                ')
+
+  estm <- sqldf('
+                SELECT id_parameter, value
+                FROM datam
+                WHERE id_station = "PED"
+                ')
+  
+  
+  
+  #est1 <-  sqldf('
+  #              SELECT date, value AS CO_1
+  #              FROM estc
+  #              WHERE id_parameter = "CO" 
+  #              ')
+  
+  #est2 <-  sqldf('
+  #              SELECT value AS NO_1
+  #              FROM estc
+  #              WHERE id_parameter = "NO" 
+  #              ')
+  
+  #est3 <-  sqldf('
+  #              SELECT value AS NO2_1
+  #              FROM estc
+  #              WHERE id_parameter = "NO2" 
+  #              ')
+  
+  #est4 <-  sqldf('
+  #              SELECT value AS SO2_1
+  #              FROM estc
+  #              WHERE id_parameter = "SO2" 
+  #              ')
+  
+  est5 <-  sqldf('
+                SELECT date, value AS O3_1
+                FROM estc
+                WHERE id_parameter = "O3" 
+                ')
+  
+  est6 <-  sqldf('
+                SELECT value AS NOX_1
+                FROM estc
+                WHERE id_parameter = "NOX"
+                ')
+  
+  #est7 <-  sqldf('
+  #              SELECT value AS RH_1
+  #              FROM estm
+  #              WHERE id_parameter = "RH" 
+  #              ')
+  
+  est8 <-  sqldf('
+                SELECT value AS TMP_1
+                FROM estm
+                WHERE id_parameter = "TMP"
+                ')
+  
+  #est9 <-  sqldf('
+  #              SELECT value AS WDR_1
+  #              FROM estm
+  #              WHERE id_parameter = "WDR" 
+  #              ')
+  
+  est10 <-  sqldf('
+                SELECT value AS WSP_1
+                FROM estm
+                WHERE id_parameter = "WSP"
+                ')
+
+  
+  Aco_a <- cbind(est5,est6,est8,est10)
+    #cbind(est1,est2,est3,est4,est5,est6,est7,est8,est9,est10)
+  Aco_Pru <- rbind(Aco_Pru, Aco_a)
+}
+
+Aco_Pru$date <- parse_date_time(Aco_Pru$date, "dmY HM")
+Aco_Pru$Year <- as.numeric(format(Aco_Pru$date,'%Y')) 
+Aco_Pru$Mont <- as.numeric(format(Aco_Pru$date,'%m')) 
+Aco_Pru$Days <- as.numeric(format(Aco_Pru$date,'%d')) 
+Aco_Pru$Hour <- hour(Aco_Pru$date)
+
+
+Aco_Pru$O3L6 <- lag(zoo(Aco_Pru$O3_1), -6, na.pad = TRUE)
+Aco_Pru$O3L5 <- lag(zoo(Aco_Pru$O3_1), -5, na.pad = TRUE)
+Aco_Pru$O3L4 <- lag(zoo(Aco_Pru$O3_1), -4, na.pad = TRUE)
+Aco_Pru$O3L3 <- lag(zoo(Aco_Pru$O3_1), -3, na.pad = TRUE)
+Aco_Pru$TMPL6 <- lag(zoo(Aco_Pru$TMP_1), -6, na.pad = TRUE)
+ Aco_Pru$TMPL5 <- lag(zoo(Aco_Pru$TMP_1), -5, na.pad = TRUE)
+ Aco_Pru$TMPL4 <- lag(zoo(Aco_Pru$TMP_1), -4, na.pad = TRUE)
+Aco_Pru$TMPL3 <- lag(zoo(Aco_Pru$TMP_1), -3, na.pad = TRUE)
+Aco_Pru$NOXL6 <- lag(zoo(Aco_Pru$NOX_1), -6, na.pad = TRUE)
+Aco_Pru$NOXL5 <- lag(zoo(Aco_Pru$NOX_1), -5, na.pad = TRUE)
+Aco_Pru$NOXL4 <- lag(zoo(Aco_Pru$NOX_1), -4, na.pad = TRUE)
+Aco_Pru$NOXL3 <- lag(zoo(Aco_Pru$NOX_1), -3, na.pad = TRUE)
+Aco_Pru$WSPL6 <- lag(zoo(Aco_Pru$WSP_1), -6, na.pad = TRUE)
+Aco_Pru$WSPL5<- lag(zoo(Aco_Pru$WSP_1), -5, na.pad = TRUE)
+Aco_Pru$WSPL4 <- lag(zoo(Aco_Pru$WSP_1), -4, na.pad = TRUE)
+Aco_Pru$WSPL3 <- lag(zoo(Aco_Pru$WSP_1), -3, na.pad = TRUE)
+
+```
+
+```{r}
+Aco_Pru.na <- na.omit(Aco_Pru)
+Aco_Pru.na$Y <- ifelse(Aco_Pru.na$O3_1 > 90, 1, 0)
+sum(Aco_Pru.na$Y)
+```
+
+
+```{r}
+plot(Aco_Pru$date,Aco_Pru$O3_1, pch=".", xlab= "TIEMPO [días]", ylab = "OZONO [ppb]", main = "PED")
+abline(h=90,col=3)
+abline(h=144,col=4)
+abline(h=154,col=2)
+```
+
+
+```{r}
+
+nij <- mCua$coefficients[1] + mCua$coefficients[2]*Aco_Pru.na$NOX_1 + mCua$coefficients[3]*Aco_Pru.na$TMP_1  + mCua$coefficients[4]*Aco_Pru.na$WSP_1 +
+       mCua$coefficients[5]*Aco_Pru.na$Year + mCua$coefficients[6]*Aco_Pru.na$Mont + mCua$coefficients[7]*Aco_Pru.na$Hour
+
+Aco_Pru.na$Pr <- exp(nij)/(1+exp(nij))
+
+pr_max <- sqldf('SELECT Year, Mont, Days, Hour, O3_1, Y, Pr
+                 FROM "Aco_Pru.na"
+                 WHERE Pr > 0.4
+                ')
+barplot(Aco_Pru.na$Pr, xlab = "Tiempo [Días]", ylab = "P(Y=1)", main= "Probabilidad de Contingencia 2022")
+
+```
+
+
+
+# Particulas Suspendidas 
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+#Limpiamos el entorno de variables
+rm(list=ls())
+```
+
+# Preparación de datos 
+
+```{r}
+P2022 <- read.csv2("promedios_2022_ps.csv", skip = 8, sep=",")
+#P2021$date <- parse_date_time(P2021$date, "dmY")
+```
+
+```{r}
+P2022_ZC <- sqldf('
+                  SELECT date, id_stMONon, value
+                  FROM P2022
+                  WHERE id_stMONon = "IZT" 
+                ')
+P2022_ZC$date <- parse_date_time(P2022_ZC$date, "dmY")
+```
+
+```{r}
+plot(P2022_ZC$date, P2022_ZC$value, type = "b")
+```
+
+
+
+
+
+ 
